@@ -192,3 +192,16 @@ New in v5.2 (all in section 10):
   the faint white bar. The log reports frame pacing, touch-to-frame latency, and whether the system home gesture
   was really suppressed (if the stock home animation also plays under the card, it was not).
 Safety: everything auto-restores (60 s block, 90 s strip). If stuck: 10k, or force-stop LauncherProbe, or reboot.
+
+### v6 - design-driven requirement labs (section 11 in the app)
+Built and tested by CI (GitHub Actions); install the `LauncherProbe-debug` artifact over the old copy.
+- **11a/11b** system transition + window animation scale to 0 (auto-restores in 120 s) and back. Animator scale is left alone.
+- **11c Launch lab**: a tile; tapping it runs OUR expand animation (tile to full screen) while Settings is started underneath, then
+  fades to reveal the app. Reports frame pacing and when Settings became the top activity vs when our animation ended.
+  Run it twice: with 11a (system animations off) and without (to see the double animation).
+- **10j strip upgrades**: grab the card mid-animation (finger takes over, no restart), sideways swipe = quick switch to the
+  previous app, card size re-read on rotation (try landscape).
+- **11d** freeform (mode 5) and multi-window (mode 6) launches from the shell, with feature flags.
+- **11e/11f** hides stock status bar clock/icons via cmd and draws our own bar on top for 90 s.
+- **11g-11j** Shizuku after reboot: grant the Shizuku app WRITE_SECURE_SETTINGS, boot log written by a BOOT_COMPLETED receiver,
+  optional wireless-debugging auto-enable at boot.
