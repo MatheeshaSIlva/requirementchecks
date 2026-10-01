@@ -234,6 +234,74 @@ for (r in listOf(150, 300, 600)) stages += "A: View.semSetBlurRadius($r)" to { v
         ui.post(step)
     }
 
+    /**
+     * 14g: animated dim-behind blur. dimAmount (0 -> 1 -> 0) updated every frame through updateViewLayout,
+     * the way a finger-tracked shade or recents would drive it. Three runs: 400 ms in, hold 1 s, 400 ms out,
+     * at max dim 0.3, 0.6 and 1.0 so we also see how strong each level looks.
+     */
+    fun animated() {
+        if (!android.provider.Settings.canDrawOverlays(ctx)) { log("[sem blur] overlay permission missing"); return }
+        stop()
+        val (w, h) = size()
+        val sb = StringBuilder("[sem blur] animated dim-behind blur\n")
+        val root = FrameLayout(ctx)
+        val label = android.widget.TextView(ctx).apply {
+            setTextColor(0xFFFFFFFF.toInt()); setBackgroundColor(0xCC000000.toInt()); textSize = 16f; setPadding(24, 24, 24, 24)
+        }
+        root.addView(label, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { topMargin = 160 })
+        val lp = WindowManager.LayoutParams(
+            w, h, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_DIM_BEHIND,
+            PixelFormat.TRANSLUCENT
+        )
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.dimAmount = 0f
+        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        if (android.os.Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
+        try {
+            val flag = WindowManager.LayoutParams::class.java.getField("SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR").getInt(null)
+            WindowManager.LayoutParams::class.java.getDeclaredMethod("semAddExtensionFlags", Int::class.javaPrimitiveType).also { it.isAccessible = true }.invoke(lp, flag)
+            WindowManager.LayoutParams::class.java.getDeclaredMethod("semSetEnterDimDuration", Long::class.javaPrimitiveType).also { it.isAccessible = true }.invoke(lp, 0L)
+        } catch (t: Throwable) { sb.appendLine("  sem flag setup failed: ${t.cause?.message ?: t.message}") }
+        try { wm.addView(root, lp) } catch (t: Throwable) { log(sb.append("addView FAILED: ${t.message}").toString()); return }
+        view = root
+        val levels = listOf(0.3f, 0.6f, 1.0f)
+        var run = 0
+        fun runOne() {
+            if (run >= levels.size) {
+                stop(); sb.appendLine("Tell me: how did each level (0.3 / 0.6 / 1.0) look, and was the blur growing smoothly or in jumps?"); log(sb.toString()); return
+            }
+            val maxDim = levels[run++]
+            label.text = "dim $maxDim"
+            val deltas = ArrayList<Double>()
+            var startNs = 0L; var lastNs = 0L; var fails = 0
+            val total = 400.0 + 1000.0 + 400.0
+            val cb = object : Choreographer.FrameCallback {
+                override fun doFrame(ns: Long) {
+                    if (startNs == 0L) startNs = ns
+                    if (lastNs != 0L) deltas += (ns - lastNs) / 1e6
+                    lastNs = ns
+                    val t = (ns - startNs) / 1e6
+                    val f = when { t < 400 -> t / 400; t < 1400 -> 1.0; else -> 1.0 - (t - 1400) / 400 }.coerceIn(0.0, 1.0)
+                    lp.dimAmount = (maxDim * f).toFloat()
+                    try { wm.updateViewLayout(root, lp) } catch (e: Throwable) { fails++ }
+                    if (t < total) choreographer.postFrameCallback(this) else {
+                        val d = if (deltas.size > 3) deltas.drop(2) else deltas
+                        val sorted = d.sorted()
+                        val median = if (sorted.isEmpty()) 0.0 else sorted[sorted.size / 2]
+                        val dropped = if (median > 0) d.sumOf { max(0, Math.round(it / median).toInt() - 1) } else 0
+                        sb.appendLine("  dim $maxDim: frames ${d.size}, median ${"%.2f".format(median)} ms, worst ${"%.2f".format(sorted.lastOrNull() ?: 0.0)} ms, dropped ~$dropped, updateViewLayout failures $fails")
+                        ui.postDelayed({ runOne() }, 800)
+                    }
+                }
+            }
+            choreographer.postFrameCallback(cb)
+        }
+        ui.post { runOne() }
+    }
+
     /** 14c: if the calls above are blocked as hidden APIs, allow them via the global policy (needs an app restart). */
     fun allowHiddenApis() {
         val s = svc() ?: run { log("[sem blur] service not connected"); return }

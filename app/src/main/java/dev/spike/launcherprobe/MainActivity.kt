@@ -600,6 +600,7 @@ class MainActivity : Activity() {
         header("14. Samsung live blur (View.semSet* methods)")
         btn("14a. Describe SemBlurInfo and the window-level Sem members") { semLab.describe() }
         btn("14b. Test: overlay window with Samsung blur calls, radius 0 -> 90 (open an app first)") { semLab.test() }
+        btn("14g. Animated dim-behind blur (dimAmount driven every frame, 3 strengths) - open an app first") { semLab.animated() }
         btn("14f. Samsung window-level blur lab (dim-behind route, canvas mode, gradient): 8 stages, 2.5 s each") { semLab.strength(2) }
         btn("14e. Blur strength lab: 11 stages, 2.5 s each, label on screen (open an app with lots of text/colors first)") { semLab.strength() }
         btn("14c. If 14b says 'blocked': allow hidden APIs (then force-stop + reopen the app, run 14b again)") { semLab.allowHiddenApis() }
