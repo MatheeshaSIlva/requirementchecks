@@ -127,7 +127,7 @@ class SemBlurLab(private val ctx: Context, private val log: (String) -> Unit, pr
      * 14e: strength lab. Steps through stages (2.5 s each) with a label on screen:
      * plain View radius at larger values, then SemBlurInfo.Builder with radius and with Samsung's presets.
      */
-    fun strength() {
+    fun strength(which: Int = 1) {
         if (!android.provider.Settings.canDrawOverlays(ctx)) { log("[sem blur] overlay permission missing"); return }
         stop()
         val (w, h) = size()
@@ -160,13 +160,47 @@ class SemBlurLab(private val ctx: Context, private val log: (String) -> Unit, pr
         fun Any.curve(p: Int): Any = bCls!!.getMethod("setColorCurvePreset", Int::class.javaPrimitiveType).invoke(this, p)!!
 
         val win = const("BLUR_MODE_WINDOW")
+        var lpRef: WindowManager.LayoutParams? = null
+        fun lpCall(name: String, vararg a: Any) {
+            try {
+                val m = WindowManager.LayoutParams::class.java.declaredMethods.first { it.name == name }
+                m.isAccessible = true; m.invoke(lpRef, *a)
+            } catch (t: Throwable) { sb.appendLine("  $name failed: ${t.cause?.message ?: t.message}") }
+        }
+        fun reset() {
+            try { enable?.invoke(root, false) } catch (t: Throwable) {}
+            lpRef?.let { l ->
+                lpCall("semClearExtensionFlags", WindowManager.LayoutParams::class.java.getField("SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR").getInt(null))
+                l.flags = l.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv(); l.dimAmount = 0f
+                try { wm.updateViewLayout(root, l) } catch (t: Throwable) {}
+            }
+        }
+        fun dimBlur(amount: Float) {
+            lpRef?.let { l ->
+                l.flags = l.flags or WindowManager.LayoutParams.FLAG_DIM_BEHIND; l.dimAmount = amount
+                lpCall("semAddExtensionFlags", WindowManager.LayoutParams::class.java.getField("SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR").getInt(null))
+                try { wm.updateViewLayout(root, l) } catch (t: Throwable) { sb.appendLine("  updateViewLayout failed: ${t.message}") }
+            }
+        }
         val stages = ArrayList<Pair<String, () -> Unit>>()
-        for (r in listOf(150, 300, 600)) stages += "A: View.semSetBlurRadius($r)" to { viewRadius(r) }
+        if (which == 1) {
+for (r in listOf(150, 300, 600)) stages += "A: View.semSetBlurRadius($r)" to { viewRadius(r) }
         for (r in listOf(50, 150, 300)) stages += "B: Builder(WINDOW).setRadius($r)" to { info(win) { it.rad(r) } }
         stages += "C: WINDOW + THICK_LIGHT preset" to { info(win) { it.curve(const("BLUR_UI_HIGH_THICK_LIGHT")) } }
         stages += "D: WINDOW + ULTRA_THICK_DARK preset" to { info(win) { it.curve(const("BLUR_UI_HIGH_ULTRA_THICK_DARK")) } }
         stages += "E: WINDOW radius 200 + bg 0x44000000" to { info(win) { it.rad(200).let { x -> x.bg(0x44000000) } } }
         stages += "F: WINDOW_CAPTURED radius 200" to { info(const("BLUR_MODE_WINDOW_CAPTURED")) { it.rad(200) } }
+
+        } else {
+            stages += "G: dim-behind 0.5 + CHANGE_DIM_EFFECT_TO_BLUR" to { dimBlur(0.5f) }
+            stages += "H: dim-behind 0.15 + CHANGE_DIM_EFFECT_TO_BLUR" to { dimBlur(0.15f) }
+            stages += "I: Builder(CANVAS) radius 100" to { info(const("BLUR_MODE_CANVAS")) { it.rad(100) } }
+            stages += "J: WINDOW radius 100 + canvasScale 4" to { info(win) { it.rad(100).let { x -> bCls!!.getMethod("setCanvasScale", Int::class.javaPrimitiveType).invoke(x, 4)!! } } }
+            stages += "K: WINDOW radius 150 + blurGradient(.5,.5,1)" to { info(win) { it.rad(150).let { x -> bCls!!.getMethod("setBlurGradient", Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType).invoke(x, 0.5f, 0.5f, 1f)!! } } }
+            stages += "L: semEnableExpandedCanvasBlur + radius 150" to { viewRadius(150); try { View::class.java.declaredMethods.first { it.name == "semEnableExpandedCanvasBlur" }.also { it.isAccessible = true }.invoke(root, true) } catch (t: Throwable) { sb.appendLine("  expanded failed: ${t.cause?.message ?: t.message}") } }
+            stages += "M: WINDOW + BG_THICK_DARK_GRAYISH curve" to { info(win) { it.curve(const("BLUR_BG_THICK_DARK_GRAYISH")) } }
+            stages += "N: WINDOW + BG_REGULAR_LIGHT curve + radius 120" to { info(win) { it.curve(const("BLUR_BG_REGULAR_LIGHT")).let { x -> x.rad(120) } } }
+        }
 
         val lp = WindowManager.LayoutParams(
             w, h, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -180,17 +214,19 @@ class SemBlurLab(private val ctx: Context, private val log: (String) -> Unit, pr
         if (android.os.Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
         try { wm.addView(root, lp) } catch (t: Throwable) { log(sb.append("addView FAILED: ${t.message}").toString()); return }
         view = root
+        lpRef = lp
         var i = 0
         val step = object : Runnable {
             override fun run() {
                 if (i >= stages.size) {
                     stop()
-                    sb.appendLine("Tell me which labels (A..F) looked fully blurred (text/shapes unreadable) and which only half blurred or tinted.")
+                    sb.appendLine("Tell me which labels looked fully blurred (text/shapes unreadable) and which only half blurred or tinted.")
                     log(sb.toString()); return
                 }
                 val (name, apply) = stages[i++]
                 label.text = name
                 sb.appendLine("  stage: $name")
+                reset()
                 apply()
                 ui.postDelayed(this, 2500)
             }
