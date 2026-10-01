@@ -424,7 +424,7 @@ class V6Lab(
                     wm.addView(row, lp)
                     barView = row
                     ui.postDelayed(barStop, 90_000)
-                    log("[own status bar] REQ: hide stock status bar contents and draw our own\n  stock bar flags: ${r.trim().replace('\n', ' | ')}\n" +
+                    log("[own status bar] REQ: hide stock status bar contents and draw our own\n  stock bar flags: ${r.trim().replace("\n", " | ")}\n" +
                         "  our bar: height $barH px, running 90 s (or 11f). Check: is the stock clock/icons gone, is OUR dark bar on top, " +
                         "does it look right with the camera hole, and what happens if you rotate the phone or pull down the shade?")
                 } catch (t: Throwable) {
