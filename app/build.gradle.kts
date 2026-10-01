@@ -16,6 +16,16 @@ android {
         versionName = "0.1"
     }
 
+    signingConfigs {
+        // Committed on purpose: CI and Android Studio sign with the SAME key, so APKs update over each other.
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildFeatures {
         aidl = true
     }
