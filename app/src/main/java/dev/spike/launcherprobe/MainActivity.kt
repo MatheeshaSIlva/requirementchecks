@@ -599,6 +599,8 @@ class MainActivity : Activity() {
         btn("13e. Stop external-open watcher") { lab7.externalWatch(false) }
         btn("13f. Watchdog: ARM (animations off + stock bar hidden), then force-stop this app") { lab7.armWatchdog() }
         btn("13g. Watchdog: read its log after reopening the app") { lab7.watchdogLog() }
+        btn("13i. Status bar diagnosis: what is hiding it, which processes exist") { lab7.diagnoseStatusBar() }
+        btn("13j. EMERGENCY RESTORE: status bar + animations, every method") { lab7.emergencyRestore() }
         btn("13h. Watchdog: disarm + restore everything") { lab7.disarmWatchdog() }
         header("14. Samsung live blur (View.semSet* methods)")
         btn("14a. Describe SemBlurInfo and the window-level Sem members") { semLab.describe() }

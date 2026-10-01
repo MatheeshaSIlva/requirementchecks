@@ -268,7 +268,7 @@ class V7Lab(private val ctx: Context, private val log: (String) -> Unit, private
                 "echo \"\$(date +%T) armed\" > /data/local/tmp/wd.log\n" +
                 "gone=0\n" +
                 "while true; do\n" +
-                "  if pidof dev.spike.launcherprobe >/dev/null 2>&1; then gone=0; else gone=\$((gone+1)); fi\n" +
+                "  if ps -A -o NAME 2>/dev/null | grep -qx dev.spike.launcherprobe; then gone=0; else gone=\$((gone+1)); fi\n" +
                 "  if [ \$gone -ge 3 ]; then\n" +
                 "    settings put global transition_animation_scale 1.0\n" +
                 "    settings put global window_animation_scale 1.0\n" +
@@ -295,6 +295,39 @@ class V7Lab(private val ctx: Context, private val log: (String) -> Unit, private
             log("[watchdog] log written by the shell-side loop:\n" + s.runShell("cat /data/local/tmp/wd.log 2>&1").trim() +
                 "\n  scale now: " + s.runShell("settings get global transition_animation_scale").trim() +
                 "\n  loop still running: " + s.runShell("pgrep -f wd.sh | head -1").trim().ifEmpty { "no" })
+        }
+    }
+
+    /** 13i: show what the system thinks is hiding the status bar, and which processes the watchdog can see. */
+    fun diagnoseStatusBar() {
+        val s = svc() ?: run { log("[statusbar diag] service not connected"); return }
+        io.execute {
+            val sb = StringBuilder("[statusbar diag]\n")
+            sb.appendLine("-- dumpsys statusbar (disable records):")
+            sb.appendLine(s.runShell("dumpsys statusbar | grep -iE 'disable|what=|pkg=|token' | head -40").trim())
+            sb.appendLine("-- processes named like us (NAME PID):")
+            sb.appendLine(s.runShell("ps -A -o NAME,PID | grep -i launcherprobe").trim())
+            sb.appendLine("-- pidof dev.spike.launcherprobe: " + s.runShell("pidof dev.spike.launcherprobe").trim())
+            sb.appendLine("-- watchdog log:")
+            sb.appendLine(s.runShell("cat /data/local/tmp/wd.log 2>&1").trim())
+            sb.appendLine("-- animation scales: " + s.runShell("settings get global transition_animation_scale; settings get global window_animation_scale").trim().replace("\n", " / "))
+            log(sb.toString())
+        }
+    }
+
+    /** 13j: emergency restore, tries every way we know to give the status bar and animations back. */
+    fun emergencyRestore() {
+        val s = svc() ?: run { log("[emergency restore] service not connected"); return }
+        io.execute {
+            val sb = StringBuilder("[emergency restore]\n")
+            sb.appendLine(s.runShell("pkill -f wd.sh 2>/dev/null; pkill -f 'sleep [0-9]*; cmd statusbar' 2>/dev/null; echo killed watchers").trim())
+            sb.appendLine(s.runShell("settings put global transition_animation_scale 1.0; settings put global window_animation_scale 1.0; echo scales reset").trim())
+            sb.appendLine("send-disable-flag none: " + s.runShell("cmd statusbar send-disable-flag none 2>&1; echo exit=\$?").trim())
+            sb.appendLine("collapse: " + s.runShell("cmd statusbar collapse 2>&1; echo exit=\$?").trim())
+            sb.appendLine("-- disable records after restore:")
+            sb.appendLine(s.runShell("dumpsys statusbar | grep -iE 'disable|what=|pkg=' | head -20").trim())
+            sb.appendLine("If the bar is still missing, tell me; a reboot always clears it (these flags live in memory only).")
+            log(sb.toString())
         }
     }
 
