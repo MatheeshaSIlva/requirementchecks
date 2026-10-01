@@ -167,6 +167,7 @@ class MainActivity : Activity() {
 
     private var svc: IProbeService? = null
     private val lab by lazy { V6Lab(applicationContext, { m -> log(m) }, { svc }) }
+    private val lab7 by lazy { V7Lab(applicationContext, { m -> log(m) }, { svc }) }
     private val blurLab by lazy { BlurLab(applicationContext) { m -> log(m) } }
     private val bg = Executors.newSingleThreadExecutor()
     private val ui = Handler(Looper.getMainLooper())
@@ -227,6 +228,7 @@ class MainActivity : Activity() {
         stopStrip()
         lab.stopAll()
         blurLab.stopAll()
+        lab7.stopAll()
         Shizuku.removeBinderReceivedListener(binderReceived)
         Shizuku.removeBinderDeadListener(binderDead)
         Shizuku.removeRequestPermissionResultListener(permResult)
@@ -584,6 +586,15 @@ class MainActivity : Activity() {
                 log(sb.toString())
             }
         }
+        header("13. v7 labs: Samsung blur, close animation, external opens, watchdog")
+        btn("13a. Samsung blur: search the framework for Sem*Blur classes + blur properties") { lab7.samsungFramework() }
+        btn("13b. Samsung blur: try hidden-API exemption and dump blur classes in the app") { lab7.samsungInApp() }
+        btn("13c. Close lab: Settings opens, then shrinks to an icon spot while home appears") { lab7.closeLab() }
+        btn("13d. External-open watcher: 60 s, animations OFF (open apps from notifications/links)") { lab7.externalWatch(true) }
+        btn("13e. Stop external-open watcher") { lab7.externalWatch(false) }
+        btn("13f. Watchdog: ARM (animations off + stock bar hidden), then force-stop this app") { lab7.armWatchdog() }
+        btn("13g. Watchdog: read its log after reopening the app") { lab7.watchdogLog() }
+        btn("13h. Watchdog: disarm + restore everything") { lab7.disarmWatchdog() }
         btn("11c2. Launch lab, QUIET (prewarmed card, app starts 80 ms in, no polling while animating)") { lab.launchLab(deferMs = 80, quiet = true) }
         btn("11c3. Launch lab, QUIET + COLD start (Settings force-stopped first; worst case)") { lab.launchLab(deferMs = 80, quiet = true, cold = true) }
         btn("11d. Windowing modes: freeform + multi-window launch test") { lab.windowingLab() }
