@@ -1,0 +1,49 @@
+name: Build probe APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        id: build
+        run: |
+          chmod +x ./gradlew
+          set +e
+          ./gradlew assembleDebug --stacktrace --console=plain > build.log 2>&1
+          echo "exit=$?" >> build.log
+          tail -n 120 build.log
+          grep -q '^exit=0$' build.log
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LauncherProbe-debug
+          path: app/build/outputs/apk/debug/*.apk
+      - name: Publish build log to ci-logs branch (so Claude can read it)
+        if: always()
+        run: |
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          mkdir -p /tmp/out && cp build.log /tmp/out/build.log
+          echo "commit: ${GITHUB_SHA}" > /tmp/out/STATUS.txt
+          echo "result: ${{ steps.build.outcome }}" >> /tmp/out/STATUS.txt
+          git checkout --orphan ci-logs
+          git rm -rf . > /dev/null 2>&1 || true
+          cp /tmp/out/* .
+          git add build.log STATUS.txt
+          git commit -m "build log for ${GITHUB_SHA}"
+          git push -f origin ci-logs
