@@ -403,7 +403,10 @@ class V6Lab(
     fun statusBarLab() {
         if (!canOverlay()) { log("[own status bar] overlay permission missing (section 6)"); return }
         val s = svc() ?: run { log("[own status bar] service not connected"); return }
-        stopStatusBar()
+        // Only drop our old view. Do NOT send a restore here: it raced with the new disable flags and cleared them.
+        ui.removeCallbacks(barStop)
+        barView?.let { try { wm.removeView(it) } catch (t: Throwable) { /* gone */ } }
+        barView = null
         io.execute {
             val r = try { s.statusBarCmd("clock system-icons notification-icons", 90) } catch (t: Throwable) { "ERROR ${t.message}" }
             ui.post {

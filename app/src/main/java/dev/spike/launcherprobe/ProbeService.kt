@@ -92,6 +92,8 @@ class ProbeService : IProbeService.Stub() {
 
     override fun statusBarCmd(flagNames: String, autoRestoreSec: Int): String {
         val out = StringBuilder()
+        // Earlier runs leave a sleeping 'restore' behind; if it fires later it silently clears these new flags.
+        shell("pkill -f 'sleep [0-9]*; cmd statusbar send-disable-flag none' 2>/dev/null; true", 3000)
         out.appendLine("cmd statusbar send-disable-flag $flagNames")
         out.appendLine(shell("cmd statusbar send-disable-flag $flagNames", 5000).trim())
         if (autoRestoreSec > 0) {
