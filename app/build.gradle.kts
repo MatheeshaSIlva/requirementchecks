@@ -13,7 +13,7 @@ android {
         // 34 on purpose: avoids forced edge-to-edge so the plain-View test UI needs no inset handling.
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1"
+        versionName = (project.findProperty("buildSha") as String?)?.take(7) ?: "local"
     }
 
     signingConfigs {

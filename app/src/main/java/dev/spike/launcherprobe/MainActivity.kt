@@ -188,7 +188,7 @@ class MainActivity : Activity() {
     private val conn = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             svc = if (binder != null && binder.pingBinder()) IProbeService.Stub.asInterface(binder) else null
-            log("service connected: ${svc != null}")
+            log("BUILD ${try { packageManager.getPackageInfo(packageName, 0).versionName } catch (t: Throwable) { "?" }} | service connected: ${svc != null}")
             ui.post { refreshStatus() }
         }
 

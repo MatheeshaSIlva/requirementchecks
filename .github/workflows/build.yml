@@ -24,7 +24,7 @@ jobs:
         run: |
           chmod +x ./gradlew
           set +e
-          ./gradlew assembleDebug --stacktrace --console=plain > build.log 2>&1
+          ./gradlew assembleDebug -PbuildSha="${GITHUB_SHA}" --stacktrace --console=plain > build.log 2>&1
           echo "exit=$?" >> build.log
           tail -n 120 build.log
           grep -q '^exit=0$' build.log
