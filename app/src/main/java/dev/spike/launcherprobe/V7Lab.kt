@@ -260,32 +260,52 @@ class V7Lab(private val ctx: Context, private val log: (String) -> Unit, private
 
     // ------------------------------------------------------------ 13f - 13h watchdog
 
+    private var hbThread: Thread? = null
+    @Volatile private var hbOn = false
+
+    private fun startHeartbeat(s: IProbeService) {
+        hbOn = true
+        hbThread = Thread {
+            while (hbOn) {
+                try { s.runShell("touch /data/local/tmp/wd.hb") } catch (t: Throwable) { /* service gone: heartbeat stops, watchdog fires */ }
+                try { Thread.sleep(1000) } catch (e: InterruptedException) { break }
+            }
+        }.also { it.isDaemon = true; it.start() }
+    }
+
+    private fun stopHeartbeat() { hbOn = false; hbThread?.interrupt(); hbThread = null }
+
     fun armWatchdog() {
         val s = svc() ?: run { log("[watchdog] service not connected"); return }
         io.execute {
             val script = "/data/local/tmp/wd.sh"
+            // The app touches wd.hb every second. If the file goes stale for 4 s the app (or its Shizuku service) is gone or frozen.
             val body = "#!/system/bin/sh\n" +
-                "echo \"\$(date +%T) armed\" > /data/local/tmp/wd.log\n" +
-                "gone=0\n" +
+                "L=/data/local/tmp/wd.log\n" +
+                "touch /data/local/tmp/wd.hb\n" +
+                "echo \"\$(date +%T) armed, loop pid \$\$\" > \$L\n" +
+                "n=0\n" +
                 "while true; do\n" +
-                "  if ps -A -o NAME 2>/dev/null | grep -qx dev.spike.launcherprobe; then gone=0; else gone=\$((gone+1)); fi\n" +
-                "  if [ \$gone -ge 3 ]; then\n" +
+                "  now=\$(date +%s); hb=\$(stat -c %Y /data/local/tmp/wd.hb 2>/dev/null || echo 0); age=\$((now-hb))\n" +
+                "  n=\$((n+1)); if [ \$((n % 10)) -eq 0 ]; then echo \"\$(date +%T) watching, heartbeat age \${age}s\" >> \$L; fi\n" +
+                "  if [ \$age -ge 4 ]; then\n" +
                 "    settings put global transition_animation_scale 1.0\n" +
                 "    settings put global window_animation_scale 1.0\n" +
                 "    cmd statusbar send-disable-flag none\n" +
-                "    echo \"\$(date +%T) app process gone -> restored animation scale and status bar\" >> /data/local/tmp/wd.log\n" +
+                "    echo \"\$(date +%T) heartbeat stale \${age}s -> restored animation scale and status bar\" >> \$L\n" +
                 "    exit 0\n" +
                 "  fi\n" +
                 "  sleep 1\n" +
                 "done\n"
             val w = s.runShell("cat > $script <<'EOF'\n$body\nEOF\nchmod 755 $script; echo written")
-            s.runShell("pkill -f wd.sh 2>/dev/null; true")
+            s.runShell("pkill -f 'wd[.]sh' 2>/dev/null; true")
             val started = s.runDetached("setsid nohup sh $script >/dev/null 2>&1 &")
+            startHeartbeat(s)
             s.runShell("settings put global transition_animation_scale 0; settings put global window_animation_scale 0")
             s.statusBarCmd("clock system-icons notification-icons", 0)
-            log("[watchdog] armed. ($w; $started)\n  Animations are now OFF and the stock status bar contents are hidden.\n" +
-                "  NOW FORCE-STOP this app (recents swipe it away, or Settings > Apps > LauncherProbe > Force stop).\n" +
-                "  Within about 5 s the system animations and status bar should come back by themselves. Then reopen the app and press 13g.")
+            log("[watchdog] armed with heartbeat. ($w; $started)\n  Animations are now OFF and the stock status bar contents are hidden.\n" +
+                "  NOW FORCE-STOP this app (Settings > Apps > LauncherProbe > Force stop) and wait up to 10 s WITHOUT reopening it.\n" +
+                "  The system animations and status bar should come back by themselves. Then reopen the app and press 13g.")
         }
     }
 
@@ -308,6 +328,8 @@ class V7Lab(private val ctx: Context, private val log: (String) -> Unit, private
             sb.appendLine("-- processes named like us (NAME PID):")
             sb.appendLine(s.runShell("ps -A -o NAME,PID | grep -i launcherprobe").trim())
             sb.appendLine("-- pidof dev.spike.launcherprobe: " + s.runShell("pidof dev.spike.launcherprobe").trim())
+            sb.appendLine("-- watchdog loop processes: " + s.runShell("ps -A -o PID,NAME,ARGS | grep '[w]d.sh'").trim())
+            sb.appendLine("-- heartbeat file age: " + s.runShell("echo \$(( \$(date +%s) - \$(stat -c %Y /data/local/tmp/wd.hb 2>/dev/null || echo 0) ))").trim() + " s")
             sb.appendLine("-- watchdog log:")
             sb.appendLine(s.runShell("cat /data/local/tmp/wd.log 2>&1").trim())
             sb.appendLine("-- animation scales: " + s.runShell("settings get global transition_animation_scale; settings get global window_animation_scale").trim().replace("\n", " / "))
@@ -320,7 +342,7 @@ class V7Lab(private val ctx: Context, private val log: (String) -> Unit, private
         val s = svc() ?: run { log("[emergency restore] service not connected"); return }
         io.execute {
             val sb = StringBuilder("[emergency restore]\n")
-            sb.appendLine(s.runShell("pkill -f wd.sh 2>/dev/null; pkill -f 'sleep [0-9]*; cmd statusbar' 2>/dev/null; echo killed watchers").trim())
+            sb.appendLine(s.runShell("pkill -f 'wd[.]sh' 2>/dev/null; pkill -f 'sleep [0-9]*; cmd statusbar' 2>/dev/null; echo killed watchers").trim())
             sb.appendLine(s.runShell("settings put global transition_animation_scale 1.0; settings put global window_animation_scale 1.0; echo scales reset").trim())
             sb.appendLine("send-disable-flag none: " + s.runShell("cmd statusbar send-disable-flag none 2>&1; echo exit=\$?").trim())
             sb.appendLine("collapse: " + s.runShell("cmd statusbar collapse 2>&1; echo exit=\$?").trim())
@@ -334,7 +356,10 @@ class V7Lab(private val ctx: Context, private val log: (String) -> Unit, private
     fun disarmWatchdog() {
         val s = svc() ?: return
         io.execute {
-            s.runShell("pkill -f wd.sh 2>/dev/null; settings put global transition_animation_scale 1.0; settings put global window_animation_scale 1.0; cmd statusbar send-disable-flag none")
+            stopHeartbeat()
+            s.runShell("pkill -f 'wd[.]sh' 2>/dev/null; true")
+            s.runShell("settings put global transition_animation_scale 1.0; settings put global window_animation_scale 1.0")
+            s.runShell("cmd statusbar send-disable-flag none")
             log("[watchdog] disarmed, everything restored.")
         }
     }
