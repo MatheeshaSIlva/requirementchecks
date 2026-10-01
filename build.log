@@ -1,0 +1,81 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:checkDebugAarMetadata
+> Task :app:generateDebugResValues
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:mergeDebugResources
+> Task :app:packageDebugResources
+> Task :app:compileDebugAidl
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :hidden-stubs:preBuild UP-TO-DATE
+> Task :hidden-stubs:preDebugBuild UP-TO-DATE
+> Task :hidden-stubs:generateDebugResValues
+> Task :hidden-stubs:generateDebugResources
+> Task :hidden-stubs:packageDebugResources
+> Task :app:processDebugManifestForPackage
+> Task :hidden-stubs:parseDebugLocalResources
+> Task :hidden-stubs:javaPreCompileDebug
+> Task :app:javaPreCompileDebug
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :hidden-stubs:generateDebugRFile
+> Task :app:mergeDebugAssets
+> Task :app:processDebugResources
+> Task :hidden-stubs:compileDebugJavaWithJavac
+> Task :app:compressDebugAssets
+> Task :app:desugarDebugFileDependencies
+> Task :hidden-stubs:bundleLibCompileToJarDebug
+> Task :app:checkDebugDuplicateClasses
+> Task :app:mergeDebugJniLibFolders
+> Task :app:mergeLibDexDebug
+> Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :hidden-stubs:mergeDebugJniLibFolders
+> Task :hidden-stubs:mergeDebugNativeLibs NO-SOURCE
+> Task :hidden-stubs:stripDebugDebugSymbols NO-SOURCE
+> Task :hidden-stubs:copyDebugJniLibsProjectAndLocalJars
+> Task :hidden-stubs:extractDebugAnnotations
+> Task :hidden-stubs:extractDeepLinksForAarDebug
+> Task :hidden-stubs:mergeDebugGeneratedProguardFiles
+> Task :hidden-stubs:mergeDebugConsumerProguardFiles
+> Task :hidden-stubs:mergeDebugShaders
+> Task :hidden-stubs:compileDebugShaders NO-SOURCE
+> Task :hidden-stubs:generateDebugAssets UP-TO-DATE
+> Task :hidden-stubs:packageDebugAssets
+> Task :hidden-stubs:prepareDebugArtProfile
+> Task :hidden-stubs:prepareLintJarForPublish
+> Task :hidden-stubs:processDebugJavaRes NO-SOURCE
+> Task :hidden-stubs:processDebugManifest
+> Task :hidden-stubs:mergeDebugJavaResource
+> Task :hidden-stubs:writeDebugAarMetadata
+> Task :hidden-stubs:syncDebugLibJars
+> Task :hidden-stubs:bundleDebugAar
+> Task :hidden-stubs:assembleDebug
+> Task :app:mergeExtDexDebug
+> Task :app:compileDebugKotlin
+> Task :app:compileDebugJavaWithJavac
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics
+> Task :app:processDebugJavaRes
+> Task :app:mergeProjectDexDebug
+> Task :app:mergeDebugJavaResource
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/build-1790893110847.json
+
+BUILD SUCCESSFUL in 37s
+58 actionable tasks: 58 executed
+exit=0
