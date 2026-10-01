@@ -178,9 +178,11 @@ class GestureStrip(
         root.addView(c, FrameLayout.LayoutParams(screenW, screenH))
         c.pivotX = screenW / 2f
         c.pivotY = screenH / 2f
+        // Exact full-display size from the first frame, drawn into the cutout/status-bar area too, so the
+        // card never gets laid out below the status bar and then resized (that showed as a stretch).
         val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
+            screenW,
+            screenH,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -188,6 +190,11 @@ class GestureStrip(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.x = 0
+        lp.y = 0
+        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        if (android.os.Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
         try {
             wm.addView(root, lp)
         } catch (t: Throwable) {
