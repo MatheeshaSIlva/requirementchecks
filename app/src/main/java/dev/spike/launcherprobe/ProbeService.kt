@@ -763,7 +763,7 @@ class ProbeService : IProbeService.Stub() {
     }
 
     override fun runAllTests(): String {
-        val sb = StringBuilder("===== LauncherProbe v5.2 requirement report =====\n")
+        val sb = StringBuilder("===== LauncherProbe v6 requirement report =====\n")
         sb.appendLine(identity()).appendLine()
         val steps: List<Pair<String, () -> String>> = listOf(
             "recents list" to { probeRecents(10) },

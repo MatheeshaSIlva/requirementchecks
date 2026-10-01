@@ -16,6 +16,7 @@ import android.view.WindowManager
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -33,6 +34,7 @@ class GestureStrip(
     private val log: (String) -> Unit,
     private val goHome: () -> Unit,
     private val snapshot: () -> Bitmap?,
+    private val quickSwitch: () -> Unit = {},
 ) {
     private val wm = ctx.getSystemService(WindowManager::class.java)
     private val density = ctx.resources.displayMetrics.density
@@ -53,6 +55,8 @@ class GestureStrip(
     private var lastT = 0L
     private var vy = 0f                 // px per ms, upward positive
     private var dragging = false
+    private var sideMode = false
+    private var lastDx = 0f
     private var animating = false
     private var anim: ValueAnimator? = null
 
@@ -124,7 +128,9 @@ class GestureStrip(
     private fun onTouch(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (animating) return true
+                if (animating) { grab(e); return true }
+                sideMode = false
+                lastDx = 0f
                 startX = e.rawX
                 startY = e.rawY
                 lastDy = 0f
@@ -139,7 +145,11 @@ class GestureStrip(
                 if (animating) return true
                 val dy = startY - e.rawY
                 val dx = e.rawX - startX
-                if (!dragging && dy > dp(10)) beginDrag()
+                lastDx = dx
+                if (!dragging) {
+                    if (dy > dp(10)) { sideMode = false; beginDrag() }
+                    else if (abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) { sideMode = true; beginDrag() }
+                }
                 if (dragging) {
                     updateCard(dx, dy)
                     val evMs = e.eventTime.toDouble()
@@ -157,7 +167,16 @@ class GestureStrip(
         return true
     }
 
+    @Suppress("DEPRECATION")
     private fun beginDrag() {
+        // Re-read the display every time so rotation never leaves the card at the old size.
+        val dm = android.util.DisplayMetrics()
+        wm.defaultDisplay.getRealMetrics(dm)
+        if (dm.widthPixels != screenW || dm.heightPixels != screenH) {
+            log("[strip] display is now ${dm.widthPixels}x${dm.heightPixels} (was ${screenW}x$screenH), card resized")
+        }
+        screenW = dm.widthPixels
+        screenH = dm.heightPixels
         val root = FrameLayout(ctx)
         root.setBackgroundColor(0x00000000)
         val bmp = snapshot()
@@ -223,11 +242,41 @@ class GestureStrip(
         cardRoot?.setBackgroundColor((a shl 24) or 0x101820)
     }
 
+    /** Finger lands on a card that is still animating: take over from where the card is, no restart. */
+    private fun grab(e: MotionEvent) {
+        val c = card
+        if (c == null) return
+        anim?.removeAllListeners()
+        anim?.removeAllUpdateListeners()
+        anim?.cancel()
+        anim = null
+        animating = false
+        val p = min(1f, max(0f, (1f - c.scaleX) / 0.5f))
+        val dyCur = p * screenH * 0.40f
+        val dxCur = c.translationX / 0.9f
+        startY = e.rawY + dyCur
+        startX = e.rawX - dxCur
+        lastDy = dyCur
+        lastDx = dxCur
+        lastT = e.eventTime
+        vy = 0f
+        sideMode = false
+        c.alpha = 1f
+        dragging = true
+        frameDeltas.clear()
+        latencies.clear()
+        lastFrameNs = 0L
+        choreographer.postFrameCallback(frameCallback)
+        log("[strip] GRABBED mid-animation: card handed to the finger at scale ${"%.2f".format(c.scaleX)} (no restart, no jump?)")
+    }
+
     private fun endDrag(up: Boolean, dy: Float) {
         val c = card
         val root = cardRoot
         if (c == null || root == null) { dragging = false; removeCard(); return }
-        val goesHome = up && (dy > screenH * 0.18f || vy > 0.9f)
+        val goesHome = !sideMode && up && (dy > screenH * 0.18f || vy > 0.9f)
+        val switched = sideMode && up && abs(lastDx) > screenW * 0.18f
+        val dirSign = if (lastDx >= 0f) 1f else -1f
         dragging = false
         animating = true
         choreographer.postFrameCallback(frameCallback)
@@ -236,11 +285,12 @@ class GestureStrip(
         val ty0 = c.translationY
         val tx0 = c.translationX
         val r0 = radius
-        val s1 = if (goesHome) 0.14f else 1f
+        val s1 = if (goesHome) 0.14f else if (switched) 0.85f else 1f
         val ty1 = if (goesHome) screenH * 0.32f else 0f
-        val tx1 = if (goesHome) 0f else 0f
+        val tx1 = if (switched) dirSign * screenW else 0f
         val r1 = if (goesHome) dp(36).toFloat() else 0f
         if (goesHome) goHome()   // home loads underneath while the card flies to the icon
+        if (switched) quickSwitch()   // previous app loads underneath while the card flies off to the side
 
         val a = ValueAnimator.ofFloat(0f, 1f)
         a.duration = if (goesHome) 280L else 220L
@@ -253,21 +303,21 @@ class GestureStrip(
             c.translationX = tx0 + (tx1 - tx0) * f
             radius = r0 + (r1 - r0) * f
             c.invalidateOutline()
-            if (goesHome) c.alpha = 1f - max(0f, (f - 0.7f) / 0.3f)
+            if (goesHome || switched) c.alpha = 1f - max(0f, (f - 0.7f) / 0.3f)
             val bg = if (goesHome) 255 else ((1f - f) * 255f).toInt()
             root.setBackgroundColor((bg shl 24) or 0x101820)
         }
         a.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 animating = false
-                finish(goesHome, dy)
+                finish(if (goesHome) "WENT HOME" else if (switched) "QUICK-SWITCHED (sideways)" else "cancelled (springed back)", goesHome || switched, dy)
             }
         })
         anim = a
         a.start()
     }
 
-    private fun finish(wentHome: Boolean, dy: Float) {
+    private fun finish(label: String, wentHome: Boolean, dy: Float) {
         val delay = if (wentHome) 150L else 0L   // let the home screen draw before the card goes away
         ui.postDelayed({ removeCard() }, delay)
         val d = if (frameDeltas.size > 3) frameDeltas.drop(1) else frameDeltas
@@ -281,7 +331,7 @@ class GestureStrip(
         val latLine = if (lat.isEmpty()) "n/a" else
             "median ${"%.1f".format(lat[lat.size / 2])} ms, p95 ${"%.1f".format(lat[min(lat.size - 1, (lat.size * 0.95).toInt())])} ms (n=${lat.size})"
         log(
-            "[strip] ${if (wentHome) "WENT HOME" else "cancelled (springed back)"}; drag travel ${"%.0f".format(dy / density)} dp\n" +
+            "[strip] $label; drag travel ${"%.0f".format(dy / density)} dp\n" +
                 "  frames ${d.size}: median ${"%.2f".format(median)} ms, p95 ${"%.2f".format(p95)} ms, worst ${"%.2f".format(worst)} ms, dropped ~$dropped\n" +
                 "  touch-event -> next frame latency: $latLine\n" +
                 "  If the phone ALSO did a stock home animation under the card, the system home gesture was not blocked."

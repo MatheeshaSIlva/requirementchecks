@@ -165,6 +165,7 @@ class MainActivity : Activity() {
     }
 
     private var svc: IProbeService? = null
+    private val lab by lazy { V6Lab(applicationContext, { m -> log(m) }, { svc }) }
     private val bg = Executors.newSingleThreadExecutor()
     private val ui = Handler(Looper.getMainLooper())
     private var polling = false
@@ -222,6 +223,7 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         polling = false
         stopStrip()
+        lab.stopAll()
         Shizuku.removeBinderReceivedListener(binderReceived)
         Shizuku.removeBinderDeadListener(binderDead)
         Shizuku.removeRequestPermissionResultListener(permResult)
@@ -542,6 +544,19 @@ class MainActivity : Activity() {
         btn("10f. Snapshot -> overlay shrink (real app image, includes fetch time)") { runAnimTest(heavy = false, useSnapshot = true) }
         btn("10g. Snapshot -> overlay shrink with blur (worst case)") { runAnimTest(heavy = true, useSnapshot = true) }
 
+        header("11. v6 labs: animations, windowing, status bar, boot")
+        note("Needs overlay permission (section 6). Open 3+ apps first. Every lab restores itself.")
+        btn("11a. System transition animations OFF (120 s, auto-restores)") { lab.animScale(true, 120) }
+        btn("11b. System animations back to normal") { lab.animScale(false, 0) }
+        btn("11c. Launch lab: our own icon-to-app animation (run 11a first, then compare with it off)") { lab.launchLab() }
+        btn("11d. Windowing modes: freeform + multi-window launch test") { lab.windowingLab() }
+        btn("11e. Own status bar: hide stock contents, draw ours (90 s)") { lab.statusBarLab() }
+        btn("11f. Stop own status bar + restore") { lab.stopStatusBar() }
+        btn("11g. Let Shizuku restart itself: grant it WRITE_SECURE_SETTINGS") { lab.grantShizukuSecureSettings() }
+        btn("11h. Boot log (reboot the phone first, then open the app and press this)") { lab.bootLog() }
+        btn("11i. Arm: turn on wireless debugging at boot (needs section 6 secure-settings grant)") { lab.armBootAutoEnable(true) }
+        btn("11j. Disarm boot auto-enable") { lab.armBootAutoEnable(false) }
+
         // log tools
         header("Log")
         btn("Copy log to clipboard") {
@@ -631,7 +646,23 @@ class MainActivity : Activity() {
                     catch (t: Throwable) { log("[strip] goHome failed: ${t.message}") }
                 }
             },
-            { stripBmp }
+            { stripBmp },
+            {
+                bg.execute {
+                    try {
+                        val ids = s.listTaskIds(6)
+                        val others = ids.filter { it != taskId }
+                        // ids[0] is the foreground task; the previous app is the next one down.
+                        val prev = if (ids.isNotEmpty() && ids[0] == taskId) others.firstOrNull() else others.getOrNull(1)
+                        if (prev == null) log("[strip] quick switch: no previous app found")
+                        else {
+                            val t = android.os.SystemClock.uptimeMillis()
+                            val r = s.testSwitchToTask(prev)
+                            log("[strip] quick switch to task $prev took ${android.os.SystemClock.uptimeMillis() - t} ms: " + r.lines().lastOrNull().orEmpty().trim())
+                        }
+                    } catch (t: Throwable) { log("[strip] quick switch failed: ${t.message}") }
+                }
+            }
         )
         strip = gs
         gs.start()
