@@ -68,6 +68,7 @@ class MainActivity : Activity() {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.TRANSLUCENT
                 )
+                lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
                 wm.addView(v, lp)
                 overlayView = v
                 log("overlay shown")
@@ -166,6 +167,7 @@ class MainActivity : Activity() {
 
     private var svc: IProbeService? = null
     private val lab by lazy { V6Lab(applicationContext, { m -> log(m) }, { svc }) }
+    private val blurLab by lazy { BlurLab(applicationContext) { m -> log(m) } }
     private val bg = Executors.newSingleThreadExecutor()
     private val ui = Handler(Looper.getMainLooper())
     private var polling = false
@@ -224,6 +226,7 @@ class MainActivity : Activity() {
         polling = false
         stopStrip()
         lab.stopAll()
+        blurLab.stopAll()
         Shizuku.removeBinderReceivedListener(binderReceived)
         Shizuku.removeBinderDeadListener(binderDead)
         Shizuku.removeRequestPermissionResultListener(permResult)
@@ -549,6 +552,19 @@ class MainActivity : Activity() {
         btn("11a. System transition animations OFF (120 s, auto-restores)") { lab.animScale(true, 120) }
         btn("11b. System animations back to normal") { lab.animScale(false, 0) }
         btn("11c. Launch lab: our own icon-to-app animation (run 11a first, then compare with it off)") { lab.launchLab() }
+        header("12. Blur and glass (hardware-accelerated windows)")
+        note("Earlier blur tests (10e/10g) drew no blur: the overlay windows were not hardware accelerated. These replace them.")
+        btn("12a. Backdrop blur: window blurs what is behind it (open an app first)") { blurLab.backdrop() }
+        btn("12b. Blur on an app snapshot (RenderEffect)") {
+            val s = svc
+            bg.execute {
+                val bmp = try {
+                    s?.listTaskIds(6)?.filter { it != taskId }?.firstNotNullOfOrNull { id -> fetchAnySnapshot(s, id)?.first }
+                } catch (t: Throwable) { null }
+                ui.post { blurLab.effect(bmp) }
+            }
+        }
+        btn("12c. Glass stress: 3 blur windows moving while the radius animates") { blurLab.stress() }
         btn("11c2. Launch lab, QUIET (prewarmed card, app starts 80 ms in, no polling while animating)") { lab.launchLab(deferMs = 80, quiet = true) }
         btn("11c3. Launch lab, QUIET + COLD start (Settings force-stopped first; worst case)") { lab.launchLab(deferMs = 80, quiet = true, cold = true) }
         btn("11d. Windowing modes: freeform + multi-window launch test") { lab.windowingLab() }
@@ -717,8 +733,7 @@ class MainActivity : Activity() {
 
         if (heavy) {
             for (i in 0 until 6) {
-                val layer = View(applicationContext)
-                layer.setBackgroundColor(if (i % 2 == 0) 0x552040FF else 0x55FF4080)
+                val layer = BlobView(applicationContext, if (i % 2 == 0) 0xAA2040FF.toInt() else 0xAAFF4080.toInt(), i)
                 layer.setRenderEffect(
                     android.graphics.RenderEffect.createBlurEffect(30f, 30f, android.graphics.Shader.TileMode.CLAMP)
                 )
@@ -757,6 +772,7 @@ class MainActivity : Activity() {
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT
         )
+        lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         try {
             wm.addView(root, lp)
         } catch (t: Throwable) {

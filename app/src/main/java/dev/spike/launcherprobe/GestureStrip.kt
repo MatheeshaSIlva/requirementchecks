@@ -95,6 +95,7 @@ class GestureStrip(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
+        lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         lp.gravity = Gravity.BOTTOM
         try {
             wm.addView(v, lp)
@@ -209,6 +210,7 @@ class GestureStrip(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
+        lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         lp.gravity = Gravity.TOP or Gravity.START
         lp.x = 0
         lp.y = 0

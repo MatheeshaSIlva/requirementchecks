@@ -950,6 +950,7 @@ class ProbeService : IProbeService.Stub() {
                         android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                     android.graphics.PixelFormat.TRANSLUCENT
                 )
+                lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
                 lp.gravity = android.view.Gravity.TOP
                 lp.packageName = PKG
                 lp.title = "probe-shell-$type"

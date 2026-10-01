@@ -165,6 +165,7 @@ class V6Lab(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
+        lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         lp.gravity = Gravity.TOP or Gravity.START
         lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         if (android.os.Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
@@ -200,6 +201,7 @@ class V6Lab(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         )
+        lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
         lp.gravity = Gravity.TOP or Gravity.START
         lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         if (android.os.Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
@@ -444,6 +446,7 @@ class V6Lab(
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                     PixelFormat.TRANSLUCENT
                 )
+                lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
                 lp.gravity = Gravity.TOP
                 lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
                 if (android.os.Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
