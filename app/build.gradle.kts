@@ -26,6 +26,16 @@ android {
         }
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // Fixed key committed on purpose: CI builds then update each other in place.
+            storeFile = rootProject.file("probe-debug.keystore")
+            storePassword = "android"
+            keyAlias = "probe"
+            keyPassword = "android"
+        }
+    }
+
     buildFeatures {
         aidl = true
     }
