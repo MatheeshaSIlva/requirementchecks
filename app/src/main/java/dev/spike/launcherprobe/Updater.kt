@@ -34,6 +34,10 @@ class Updater(private val ctx: Context, private val log: (String) -> Unit, priva
                 prefs.edit().putString("sha", sha).commit()
                 val path = f.absolutePath
                 s.runShell("setsid nohup sh -c 'sleep 1; pm install -r -d $path > /data/local/tmp/update.log 2>&1; am start -n ${ctx.packageName}/.MainActivity >> /data/local/tmp/update.log 2>&1' >/dev/null 2>&1 &")
+                // If the install worked this process is killed. If we are still alive after a few seconds, it failed: show why.
+                Thread.sleep(8000)
+                val why = s.runShell("cat /data/local/tmp/update.log 2>&1; ls -l $path 2>&1; id").trim()
+                log("[update] still running 8 s after the install command, so the install did not replace the app. Installer said:\n$why")
             } catch (t: Throwable) {
                 log("[update] failed: ${t.javaClass.simpleName}: ${t.message}")
             }
