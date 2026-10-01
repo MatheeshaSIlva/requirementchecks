@@ -71,4 +71,5 @@ interface IProbeService {
     // v6.1: add a window of the given WindowManager type from THIS (shell uid) process for `seconds` seconds.
     // Used to find out whether a shell-owned window can sit above the stock status bar.
     String shellWindowTest(int type, int seconds) = 40;
+    String downloadFile(String url, String dest) = 41;
 }

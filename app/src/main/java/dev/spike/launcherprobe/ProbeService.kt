@@ -571,6 +571,27 @@ class ProbeService : IProbeService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
+    /** Downloads inside the shell-uid process, so the file lands where the shell installer can read it. */
+    override fun downloadFile(url: String, dest: String): String = try {
+        var u = url
+        var hops = 0
+        var c = java.net.URL(u).openConnection() as java.net.HttpURLConnection
+        c.connectTimeout = 15000; c.readTimeout = 60000; c.instanceFollowRedirects = true
+        while (c.responseCode in 301..308 && hops++ < 5) {
+            u = c.getHeaderField("Location"); c.disconnect()
+            c = java.net.URL(u).openConnection() as java.net.HttpURLConnection
+            c.connectTimeout = 15000; c.readTimeout = 60000
+        }
+        if (c.responseCode != 200) "ERROR: HTTP ${c.responseCode}" else {
+            val f = File(dest)
+            c.inputStream.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+            f.setReadable(true, false)
+            "OK ${f.length()}"
+        }
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
     override fun runShell(command: String): String = shell(command, 8000)
 
     private fun shell(command: String, timeoutMs: Long): String {
