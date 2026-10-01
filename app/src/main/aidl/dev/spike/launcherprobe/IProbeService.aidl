@@ -67,4 +67,8 @@ interface IProbeService {
     Bitmap snapshotBuffer(int taskId, int mode) = 33;
     // Per recent task: which snapshot APIs return an image (live vs cached vs take), with timings.
     String snapshotMatrix(int max) = 34;
+
+    // v6.1: add a window of the given WindowManager type from THIS (shell uid) process for `seconds` seconds.
+    // Used to find out whether a shell-owned window can sit above the stock status bar.
+    String shellWindowTest(int type, int seconds) = 40;
 }

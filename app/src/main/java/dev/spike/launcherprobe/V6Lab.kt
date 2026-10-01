@@ -109,11 +109,20 @@ class V6Lab(
         labCard = null
     }
 
-    fun launchLab() {
+    private class CardParts(val root: FrameLayout, val card: View, val rad: FloatArray)
+    private var pre: CardParts? = null
+    private var optDefer = 0
+    private var optQuiet = false
+
+    /** deferMs: wait this long before starting the app. quiet: no polling during the animation + prewarmed card window. cold: force-stop the app first. */
+    fun launchLab(deferMs: Int = 0, quiet: Boolean = false, cold: Boolean = false) {
         if (!canOverlay()) { log("[launch lab] overlay permission missing (section 6)"); return }
         val s = svc() ?: run { log("[launch lab] service not connected"); return }
         stopLaunchLab()
         val (w, h) = realSize()
+        optDefer = deferMs
+        optQuiet = quiet
+        if (cold) io.execute { try { s.runShell("am force-stop com.android.settings") } catch (t: Throwable) { /* ignore */ } }
 
         val root = FrameLayout(ctx)
         root.setBackgroundColor(0xE6101820.toInt())
@@ -162,45 +171,26 @@ class V6Lab(
         try {
             wm.addView(root, lp)
             labRoot = root
-            log("[launch lab] open. Tap the tile.")
+            if (quiet) pre = buildCard(w, h, visible = false)
+            log("[launch lab] open (defer ${deferMs} ms, quiet=$quiet, cold=$cold). Tap the tile.")
         } catch (t: Throwable) {
             log("[launch lab] addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
 
-    private fun runLaunch(s: IProbeService, tile: View, w: Int, h: Int) {
-        val loc = IntArray(2)
-        tile.getLocationOnScreen(loc)
-        val tileW = tile.width.toFloat()
-        val tileH = tile.height.toFloat()
-        val cx = loc[0] + tileW / 2f
-        val cy = loc[1] + tileH / 2f
-
-        // Full-screen card that starts as the tile and grows to the whole screen.
+    private fun buildCard(w: Int, h: Int, visible: Boolean): CardParts? {
         val cardRoot = FrameLayout(ctx)
-        var radius = dp(24).toFloat()
+        val rad = floatArrayOf(dp(24).toFloat())
         val card = View(ctx)
         card.setBackgroundColor(0xFF3B6FE0.toInt())
         card.clipToOutline = true
         card.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
-                outline.setRoundRect(0, 0, view.width, view.height, radius)
+                outline.setRoundRect(0, 0, view.width, view.height, rad[0])
             }
         }
+        card.visibility = if (visible) View.VISIBLE else View.INVISIBLE
         cardRoot.addView(card, FrameLayout.LayoutParams(w, h))
-        card.pivotX = w / 2f
-        card.pivotY = h / 2f
-        val sx0 = tileW / w
-        val sy0 = tileH / h
-        val tx0 = cx - w / 2f
-        val ty0 = cy - h / 2f
-        card.scaleX = sx0
-        card.scaleY = sy0
-        card.translationX = tx0
-        card.translationY = ty0
-        // The corner radius is applied before scaling, so compensate to keep ~24dp on screen at the start.
-        radius = dp(24) / max(sx0, 0.01f)
-
         val lp = WindowManager.LayoutParams(
             w, h,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -213,12 +203,45 @@ class V6Lab(
         lp.gravity = Gravity.TOP or Gravity.START
         lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         if (android.os.Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
-        try {
+        return try {
             wm.addView(cardRoot, lp)
+            labCard = cardRoot
+            CardParts(cardRoot, card, rad)
         } catch (t: Throwable) {
             log("[launch lab] card addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
-            return
+            null
         }
+    }
+
+    private fun runLaunch(s: IProbeService, tile: View, w: Int, h: Int) {
+        val loc = IntArray(2)
+        tile.getLocationOnScreen(loc)
+        val tileW = tile.width.toFloat()
+        val tileH = tile.height.toFloat()
+        val cx = loc[0] + tileW / 2f
+        val cy = loc[1] + tileH / 2f
+
+        // Full-screen card that starts as the tile and grows to the whole screen.
+        val parts = pre ?: buildCard(w, h, visible = true)
+        pre = null
+        if (parts == null) return
+        val cardRoot = parts.root
+        val card = parts.card
+        val rad = parts.rad
+        card.visibility = View.VISIBLE
+        card.pivotX = w / 2f
+        card.pivotY = h / 2f
+        val sx0 = tileW / w
+        val sy0 = tileH / h
+        val tx0 = cx - w / 2f
+        val ty0 = cy - h / 2f
+        card.scaleX = sx0
+        card.scaleY = sy0
+        card.translationX = tx0
+        card.translationY = ty0
+        // The corner radius is applied before scaling, so compensate to keep ~24dp on screen at the start.
+        rad[0] = dp(24) / max(sx0, 0.01f)
+        card.invalidateOutline()
         labCard = cardRoot
 
         val t0 = SystemClock.uptimeMillis()
@@ -240,6 +263,7 @@ class V6Lab(
         // Start the real app right away, from a worker thread.
         io.execute {
             try {
+                if (optDefer > 0) Thread.sleep(optDefer.toLong())
                 s.runDetached("am start -n com.android.settings/.Settings")
                 dispatchedAt.set(SystemClock.uptimeMillis() - t0)
             } catch (t: Throwable) {
@@ -248,6 +272,8 @@ class V6Lab(
         }
         // Watch for the app actually becoming the top resumed activity.
         io.execute {
+            // Quiet mode: do not run dumpsys while the animation is drawing; it competes for CPU.
+            if (optQuiet) Thread.sleep(330)
             val deadline = SystemClock.uptimeMillis() + 4000
             while (SystemClock.uptimeMillis() < deadline) {
                 val r = try {
@@ -269,7 +295,7 @@ class V6Lab(
             card.scaleY = sy0 + (1f - sy0) * f
             card.translationX = tx0 * (1f - f)
             card.translationY = ty0 * (1f - f)
-            radius = (dp(24) / max(card.scaleX, 0.01f)) * (1f - f)
+            rad[0] = (dp(24) / max(card.scaleX, 0.01f)) * (1f - f)
             card.invalidateOutline()
         }
         a.addListener(object : AnimatorListenerAdapter() {
@@ -323,7 +349,7 @@ class V6Lab(
             "frames ${d.size}: median ${"%.2f".format(median)} ms, worst ${"%.2f".format(worst)} ms, dropped ~$dropped"
         }
         val topTxt = if (top >= 0) "$top ms" else "NOT DETECTED within 4 s"
-        val gap = if (top >= 0) (top - animDone) else null
+        val gap = if (top >= 0 && !optQuiet) (top - animDone) else null
         log(
             "[launch lab] result\n" +
                 "  start command sent at +$dispatched ms\n" +
@@ -332,6 +358,7 @@ class V6Lab(
                 (if (gap != null) "  app ready ${if (gap <= 0) "BEFORE" else "AFTER"} our animation ended by ${kotlin.math.abs(gap)} ms " +
                     "(positive = the card had to wait for the app)\n" else "") +
                 "  $line\n" +
+                (if (optQuiet) "  (quiet mode: the top-activity check starts after the animation, so only frame numbers and your eyes matter here)\n" else "") +
                 "  Tell me: did you see a flash, a double animation (system one + ours), or a clean reveal?"
         )
     }

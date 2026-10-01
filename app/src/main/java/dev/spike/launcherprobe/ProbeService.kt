@@ -923,6 +923,48 @@ class ProbeService : IProbeService.Stub() {
         return Class.forName(stubClass).getMethod("asInterface", IBinder::class.java).invoke(null, binder)!!
     }
 
+    private var winThread: HandlerThread? = null
+
+    override fun shellWindowTest(type: Int, seconds: Int): String {
+        val result = arrayOf("not run")
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val ht = winThread ?: HandlerThread("shell-window").also { it.start(); winThread = it }
+        val h = Handler(ht.looper)
+        h.post {
+            try {
+                val atClass = Class.forName("android.app.ActivityThread")
+                var at: Any? = atClass.getMethod("currentActivityThread").invoke(null)
+                if (at == null) at = atClass.getMethod("systemMain").invoke(null)
+                val sysUi = atClass.getMethod("getSystemUiContext").invoke(at) as android.content.Context
+                val wm = sysUi.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+                val tv = android.widget.TextView(sysUi)
+                tv.text = "SHELL WINDOW type $type"
+                tv.setTextColor(-1)
+                tv.gravity = android.view.Gravity.CENTER
+                tv.setBackgroundColor(0xFFCC2244.toInt())
+                val lp = android.view.WindowManager.LayoutParams(
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT, 140, type,
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    android.graphics.PixelFormat.TRANSLUCENT
+                )
+                lp.gravity = android.view.Gravity.TOP
+                lp.packageName = PKG
+                lp.title = "probe-shell-$type"
+                wm.addView(tv, lp)
+                result[0] = "added OK"
+                h.postDelayed({ try { wm.removeView(tv) } catch (t: Throwable) { /* gone */ } }, seconds * 1000L)
+            } catch (t: Throwable) {
+                result[0] = "FAILED: " + describe(t)
+            }
+            latch.countDown()
+        }
+        latch.await(6, java.util.concurrent.TimeUnit.SECONDS)
+        return "type $type: ${result[0]}"
+    }
+
     private fun callDisable(sb: Any, names: List<String>, what: Int): String {
         for (n in names) {
             val m = sb.javaClass.methods.firstOrNull { it.name == n && it.parameterTypes.size in 3..4 } ?: continue

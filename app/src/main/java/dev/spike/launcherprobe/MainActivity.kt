@@ -549,7 +549,21 @@ class MainActivity : Activity() {
         btn("11a. System transition animations OFF (120 s, auto-restores)") { lab.animScale(true, 120) }
         btn("11b. System animations back to normal") { lab.animScale(false, 0) }
         btn("11c. Launch lab: our own icon-to-app animation (run 11a first, then compare with it off)") { lab.launchLab() }
+        btn("11c2. Launch lab, QUIET (prewarmed card, app starts 80 ms in, no polling while animating)") { lab.launchLab(deferMs = 80, quiet = true) }
+        btn("11c3. Launch lab, QUIET + COLD start (Settings force-stopped first; worst case)") { lab.launchLab(deferMs = 80, quiet = true, cold = true) }
         btn("11d. Windowing modes: freeform + multi-window launch test") { lab.windowingLab() }
+        btn("11k. Shell-process windows: which window types draw ABOVE the stock status bar (5 x 4 s, watch the top)") {
+            val s = svc
+            if (s == null) log("[shell windows] service not connected") else bg.execute {
+                val sb = StringBuilder("[shell windows] REQ: a shell-owned window above the stock status bar\n")
+                for (type in intArrayOf(2017, 2014, 2024, 2006, 2015)) {
+                    try { sb.appendLine(s.shellWindowTest(type, 4)) } catch (t: Throwable) { sb.appendLine("type $type: CALL FAILED ${t.message}") }
+                    Thread.sleep(4300)
+                }
+                sb.appendLine("Tell me for each red bar that appeared (in this order: 2017, 2014, 2024, 2006, 2015) whether it covered the stock status bar, sat under it, or did not appear.")
+                log(sb.toString())
+            }
+        }
         btn("11e. Own status bar: hide stock contents, draw ours (90 s)") { lab.statusBarLab() }
         btn("11f. Stop own status bar + restore") { lab.stopStatusBar() }
         btn("11g. Let Shizuku restart itself: grant it WRITE_SECURE_SETTINGS") { lab.grantShizukuSecureSettings() }
