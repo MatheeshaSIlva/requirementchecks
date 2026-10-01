@@ -565,6 +565,25 @@ class MainActivity : Activity() {
             }
         }
         btn("12c. Glass stress: 3 blur windows moving while the radius animates") { blurLab.stress() }
+        btn("12d. Why is cross-window blur off? Read the switches, try to turn it on, re-check") {
+            val s = svc
+            if (s == null) log("[blur switches] service not connected") else bg.execute {
+                fun cw() = if (android.os.Build.VERSION.SDK_INT >= 31) applicationContext.getSystemService(WindowManager::class.java).isCrossWindowBlurEnabled else false
+                val sb = StringBuilder("[blur switches]\n")
+                sb.appendLine("cross-window blur enabled now: ${cw()}")
+                sb.appendLine("ro.surface_flinger.supports_background_blur = " + s.runShell("getprop ro.surface_flinger.supports_background_blur").trim() + "  (1 = the device maker allows it; empty/0 = not allowed)")
+                sb.appendLine("persist.sys.sf.disable_blurs = " + s.runShell("getprop persist.sys.sf.disable_blurs").trim())
+                sb.appendLine("settings global disable_window_blurs = " + s.runShell("settings get global disable_window_blurs").trim())
+                sb.appendLine("battery saver (low_power) = " + s.runShell("settings get global low_power").trim())
+                sb.appendLine("power mode / adaptive: " + s.runShell("settings get global low_power_sticky; settings get system psm_switch").trim().replace("\n", " | "))
+                sb.appendLine("-- trying: disable_window_blurs=0, low_power=0")
+                sb.appendLine(s.runShell("settings put global disable_window_blurs 0 2>&1; settings put global low_power 0 2>&1").trim())
+                Thread.sleep(1500)
+                sb.appendLine("cross-window blur enabled after: ${cw()}")
+                sb.appendLine("If still false the device property is the blocker: it is set by Samsung in the system image and cannot be changed without root.")
+                log(sb.toString())
+            }
+        }
         btn("11c2. Launch lab, QUIET (prewarmed card, app starts 80 ms in, no polling while animating)") { lab.launchLab(deferMs = 80, quiet = true) }
         btn("11c3. Launch lab, QUIET + COLD start (Settings force-stopped first; worst case)") { lab.launchLab(deferMs = 80, quiet = true, cold = true) }
         btn("11d. Windowing modes: freeform + multi-window launch test") { lab.windowingLab() }
