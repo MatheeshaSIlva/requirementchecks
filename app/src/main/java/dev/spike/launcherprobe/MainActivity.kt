@@ -168,6 +168,7 @@ class MainActivity : Activity() {
     private var svc: IProbeService? = null
     private val lab by lazy { V6Lab(applicationContext, { m -> log(m) }, { svc }) }
     private val lab7 by lazy { V7Lab(applicationContext, { m -> log(m) }, { svc }) }
+    private val updater by lazy { Updater(applicationContext, { m -> log(m) }, { svc }) }
     private val semLab by lazy { SemBlurLab(applicationContext, { m -> log(m) }, { svc }) }
     private val blurLab by lazy { BlurLab(applicationContext) { m -> log(m) } }
     private val bg = Executors.newSingleThreadExecutor()
@@ -353,6 +354,8 @@ class MainActivity : Activity() {
         // TOP - one-tap requirement suite (kept at the top so it needs no scrolling)
         header("★ Requirement suite")
         note("Setup first (grant + connect), open a few apps, then run this. It covers everything except the swipe/overlay tests, which need a real gesture (section 6).")
+        btn("UPDATE: install newest build from GitHub (silent, via Shizuku)") { updater.update(false) }
+        btn("UPDATE (force reinstall)") { updater.update(true) }
         btn("Auto-setup + Run all tests") {
             autoSetupThenRun()
         }

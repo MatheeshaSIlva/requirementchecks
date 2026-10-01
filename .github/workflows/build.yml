@@ -34,6 +34,15 @@ jobs:
         with:
           name: LauncherProbe-debug
           path: app/build/outputs/apk/debug/*.apk
+      - name: Publish rolling "latest" release (used by the in-app updater)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/*.apk /tmp/LauncherProbe.apk
+          gh release delete latest --cleanup-tag -y || true
+          gh release create latest /tmp/LauncherProbe.apk --prerelease --target "${GITHUB_SHA}" \
+            --title "latest build" --notes "${GITHUB_SHA}"
       - name: Publish build log to ci-logs branch (so Claude can read it)
         if: always()
         run: |
