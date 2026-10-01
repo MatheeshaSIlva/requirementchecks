@@ -123,6 +123,81 @@ class SemBlurLab(private val ctx: Context, private val log: (String) -> Unit, pr
         choreographer.postFrameCallback(cb)
     }
 
+    /**
+     * 14e: strength lab. Steps through stages (2.5 s each) with a label on screen:
+     * plain View radius at larger values, then SemBlurInfo.Builder with radius and with Samsung's presets.
+     */
+    fun strength() {
+        if (!android.provider.Settings.canDrawOverlays(ctx)) { log("[sem blur] overlay permission missing"); return }
+        stop()
+        val (w, h) = size()
+        val sb = StringBuilder("[sem blur] strength lab\n")
+        val root = FrameLayout(ctx)
+        val label = android.widget.TextView(ctx).apply {
+            setTextColor(0xFFFFFFFF.toInt()); setBackgroundColor(0xCC000000.toInt()); textSize = 16f; setPadding(24, 24, 24, 24)
+        }
+        root.addView(label, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { topMargin = 160 })
+        val infoCls = try { Class.forName("android.view.SemBlurInfo") } catch (t: Throwable) { null }
+        val bCls = try { Class.forName("android.view.SemBlurInfo\$Builder") } catch (t: Throwable) { null }
+        fun const(n: String): Int = try { infoCls!!.getField(n).getInt(null) } catch (t: Throwable) { -1 }
+        val setInfo = View::class.java.declaredMethods.firstOrNull { it.name == "semSetBlurInfo" }?.also { it.isAccessible = true }
+        val enable = findMethod("semSetBlurEnabled", Boolean::class.javaPrimitiveType!!)
+        val radiusM = findMethod("semSetBlurRadius", Int::class.javaPrimitiveType!!)
+        val colorM = findMethod("semSetBackgroundBlurColor", Int::class.javaPrimitiveType!!)
+
+        fun viewRadius(r: Int) { try { enable?.invoke(root, true); radiusM?.invoke(root, r); colorM?.invoke(root, 0x22FFFFFF) } catch (t: Throwable) { sb.appendLine("  view call failed: ${t.cause?.message ?: t.message}") } }
+        fun info(mode: Int, setup: (Any) -> Any = { it }) {
+            try {
+                enable?.invoke(root, true)
+                var b: Any = bCls!!.getConstructor(Int::class.javaPrimitiveType).newInstance(mode)
+                b = setup(b)
+                val built = bCls.getMethod("build").invoke(b)
+                setInfo!!.invoke(root, built)
+            } catch (t: Throwable) { sb.appendLine("  SemBlurInfo failed: ${t.javaClass.simpleName}: ${t.cause?.message ?: t.message}") }
+        }
+        fun Any.rad(r: Int): Any = bCls!!.getMethod("setRadius", Int::class.javaPrimitiveType).invoke(this, r)!!
+        fun Any.bg(c: Int): Any = bCls!!.getMethod("setBackgroundColor", Int::class.javaPrimitiveType).invoke(this, c)!!
+        fun Any.curve(p: Int): Any = bCls!!.getMethod("setColorCurvePreset", Int::class.javaPrimitiveType).invoke(this, p)!!
+
+        val win = const("BLUR_MODE_WINDOW")
+        val stages = ArrayList<Pair<String, () -> Unit>>()
+        for (r in listOf(150, 300, 600)) stages += "A: View.semSetBlurRadius($r)" to { viewRadius(r) }
+        for (r in listOf(50, 150, 300)) stages += "B: Builder(WINDOW).setRadius($r)" to { info(win) { it.rad(r) } }
+        stages += "C: WINDOW + THICK_LIGHT preset" to { info(win) { it.curve(const("BLUR_UI_HIGH_THICK_LIGHT")) } }
+        stages += "D: WINDOW + ULTRA_THICK_DARK preset" to { info(win) { it.curve(const("BLUR_UI_HIGH_ULTRA_THICK_DARK")) } }
+        stages += "E: WINDOW radius 200 + bg 0x44000000" to { info(win) { it.rad(200).let { x -> x.bg(0x44000000) } } }
+        stages += "F: WINDOW_CAPTURED radius 200" to { info(const("BLUR_MODE_WINDOW_CAPTURED")) { it.rad(200) } }
+
+        val lp = WindowManager.LayoutParams(
+            w, h, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        )
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        if (android.os.Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
+        try { wm.addView(root, lp) } catch (t: Throwable) { log(sb.append("addView FAILED: ${t.message}").toString()); return }
+        view = root
+        var i = 0
+        val step = object : Runnable {
+            override fun run() {
+                if (i >= stages.size) {
+                    stop()
+                    sb.appendLine("Tell me which labels (A..F) looked fully blurred (text/shapes unreadable) and which only half blurred or tinted.")
+                    log(sb.toString()); return
+                }
+                val (name, apply) = stages[i++]
+                label.text = name
+                sb.appendLine("  stage: $name")
+                apply()
+                ui.postDelayed(this, 2500)
+            }
+        }
+        ui.post(step)
+    }
+
     /** 14c: if the calls above are blocked as hidden APIs, allow them via the global policy (needs an app restart). */
     fun allowHiddenApis() {
         val s = svc() ?: run { log("[sem blur] service not connected"); return }
