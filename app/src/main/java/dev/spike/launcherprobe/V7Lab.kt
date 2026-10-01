@@ -314,7 +314,7 @@ class V7Lab(private val ctx: Context, private val log: (String) -> Unit, private
         io.execute {
             log("[watchdog] log written by the shell-side loop:\n" + s.runShell("cat /data/local/tmp/wd.log 2>&1").trim() +
                 "\n  scale now: " + s.runShell("settings get global transition_animation_scale").trim() +
-                "\n  loop still running: " + s.runShell("pgrep -f wd.sh | head -1").trim().ifEmpty { "no" })
+                "\n  loop still running: " + s.runShell("pgrep -f 'wd[.]sh' | head -1").trim().ifEmpty { "no" })
         }
     }
 
