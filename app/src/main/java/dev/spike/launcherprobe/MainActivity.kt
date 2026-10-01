@@ -168,6 +168,7 @@ class MainActivity : Activity() {
     private var svc: IProbeService? = null
     private val lab by lazy { V6Lab(applicationContext, { m -> log(m) }, { svc }) }
     private val lab7 by lazy { V7Lab(applicationContext, { m -> log(m) }, { svc }) }
+    private val semLab by lazy { SemBlurLab(applicationContext, { m -> log(m) }, { svc }) }
     private val blurLab by lazy { BlurLab(applicationContext) { m -> log(m) } }
     private val bg = Executors.newSingleThreadExecutor()
     private val ui = Handler(Looper.getMainLooper())
@@ -229,6 +230,7 @@ class MainActivity : Activity() {
         lab.stopAll()
         blurLab.stopAll()
         lab7.stopAll()
+        semLab.stop()
         Shizuku.removeBinderReceivedListener(binderReceived)
         Shizuku.removeBinderDeadListener(binderDead)
         Shizuku.removeRequestPermissionResultListener(permResult)
@@ -595,6 +597,11 @@ class MainActivity : Activity() {
         btn("13f. Watchdog: ARM (animations off + stock bar hidden), then force-stop this app") { lab7.armWatchdog() }
         btn("13g. Watchdog: read its log after reopening the app") { lab7.watchdogLog() }
         btn("13h. Watchdog: disarm + restore everything") { lab7.disarmWatchdog() }
+        header("14. Samsung live blur (View.semSet* methods)")
+        btn("14a. Describe SemBlurInfo and the window-level Sem members") { semLab.describe() }
+        btn("14b. Test: overlay window with Samsung blur calls, radius 0 -> 90 (open an app first)") { semLab.test() }
+        btn("14c. If 14b says 'blocked': allow hidden APIs (then force-stop + reopen the app, run 14b again)") { semLab.allowHiddenApis() }
+        btn("14d. Put hidden-API policy back to normal") { semLab.restoreHiddenApis() }
         btn("11c2. Launch lab, QUIET (prewarmed card, app starts 80 ms in, no polling while animating)") { lab.launchLab(deferMs = 80, quiet = true) }
         btn("11c3. Launch lab, QUIET + COLD start (Settings force-stopped first; worst case)") { lab.launchLab(deferMs = 80, quiet = true, cold = true) }
         btn("11d. Windowing modes: freeform + multi-window launch test") { lab.windowingLab() }
